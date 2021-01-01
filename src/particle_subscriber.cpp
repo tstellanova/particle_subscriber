@@ -41,6 +41,16 @@ void play_bell_tone() {
     noTone(D3);
 }
 
+void play_wakeup_tone() {
+    tone(D3, 262, 125);
+    delay(125);
+    tone(D3, 440, 125);
+    delay(125);
+    tone(D3, 262, 125);
+    delay(125);
+    noTone(D3);
+}
+
 // callback from webhook
 void evt_doorbell_handler(const char *event, const char *data) {
     Log.info(event);
@@ -74,7 +84,6 @@ int render_string(String command) {
     return 0;
 }
 
-
 // configure the display driver
 void display_setup() { 
   delay(250);
@@ -91,32 +100,29 @@ void display_setup() {
 
 }
 
-
-void setup()
-{
+void setup() {
     Particle.syncTime();
     Particle.function("render",render_string);
-    Particle.subscribe("evt_door", evt_doorbell_handler);
-    
+    Particle.subscribe("household/frontdoor/bell01", evt_doorbell_handler);
     Log.info("My device ID: %s", (const char*)System.deviceID());
+
+    // Publish vitals periodically, indefinitely
+    Particle.publishVitals(60);  
 
     pinMode(D3, OUTPUT);// PWM tone output pin
 
     display_setup();
-
-    // Time.zone(-7.0);
-    play_bell_tone();
+    play_wakeup_tone();
 }
 
 void loop() {
-
     //allow time for OTA response or firmware updates
     delay(5000);
     Particle.process();
 
     if (_clear_screen) {
-        blank_screen();
         _clear_screen = false;
+        blank_screen();
     }
 }
 
