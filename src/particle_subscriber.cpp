@@ -7,48 +7,70 @@
 // forward declarations
 void evt_doorbell_handler(const char *event, const char *data);
 int render_string(String command);
+int tone_test(String name);
 void blank_screen();
 void oneshot_timer_cb();
 
-// -----------------------------------
-// Controlling Displays over the Internet
-// -----------------------------------
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+// OLED screen definitions
+const uint8_t SCREEN_WIDTH = 128; // width, in pixels
+const uint8_t SCREEN_HEIGHT = 64; // height, in pixels
 
-static bool _clear_screen = false;
-static Timer _cleanup_screen_timer(30000, oneshot_timer_cb, true);
+// PWM audio output pin
+const uint16_t SPKR_PIN = D3;
+// approximate tone frequencies:
+const unsigned int TONE_A4 = 440;
+const unsigned int TONE_B4 = 494;
+const unsigned int TONE_C4 = 262;
+const unsigned int TONE_D4 = 294;
+const unsigned int TONE_E4 = 330;
+const unsigned int TONE_F4 = 349;
+const unsigned int TONE_G4 = 392;
+
+// static globals
+static bool g_clear_screen = false;
+static Timer g_screen_cleanup_timer(30000, oneshot_timer_cb, true);
 
 // SSD1306 display connected to I2C (SDA, SCL pins)
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-SystemSleepConfiguration _sleep_config;
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
+SystemSleepConfiguration g_sleep_config;
 
 // Use primary serial over USB interface for logging output
 SerialLogHandler logHandler(LOG_LEVEL_WARN, { // Logging level for non-application messages
     { "app", LOG_LEVEL_INFO } // Logging level for application messages
 });
 
-void play_bell_tone() {
-    for (int count= 0; count < 5; count++) {
-        tone(D3, 800, 125);
-        delay(125);
-        noTone(D3);
-        delay(125);
-        tone(D3, 700, 500);
-        delay(500);
+// play a tone and wait for it to complete before moving on
+void sync_play_tone(unsigned int frequency, int milliseconds) {
+    if (frequency != 0) {
+        tone(SPKR_PIN, frequency, milliseconds);
     }
-    noTone(D3);
+    else {
+        noTone(SPKR_PIN);
+    }
+    delay(milliseconds);
 }
 
-void play_wakeup_tone() {
-    tone(D3, 262, 125);
-    delay(125);
-    tone(D3, 440, 125);
-    delay(125);
-    tone(D3, 262, 125);
-    delay(125);
-    noTone(D3);
+void play_bell_tone() {
+    for (int count= 0; count < 3; count++) {
+        sync_play_tone(TONE_C4, 125);
+        sync_play_tone(TONE_D4, 125);
+        sync_play_tone(TONE_E4, 125);
+        sync_play_tone(TONE_F4, 125);
+        sync_play_tone(TONE_G4, 125);
+        sync_play_tone(TONE_A4, 125);
+        sync_play_tone(TONE_B4, 125);
+        sync_play_tone((2*TONE_C4), 125);
+        sync_play_tone(0, 1000);
+    }
+    noTone(SPKR_PIN);
+}
+
+void play_wakeup_tones() {
+    sync_play_tone(TONE_C4, 250);
+    sync_play_tone((2*TONE_C4), 250);
+    sync_play_tone(TONE_C4, 250);
+    sync_play_tone((2*TONE_C4), 250);
+    noTone(SPKR_PIN);
 }
 
 // callback from webhook
@@ -56,12 +78,13 @@ void evt_doorbell_handler(const char *event, const char *data) {
     Log.info(event);
     play_bell_tone();
     render_string("DOOR");
-    _cleanup_screen_timer.reset();
-    _cleanup_screen_timer.start();
+    g_screen_cleanup_timer.reset();
+    g_screen_cleanup_timer.start();
 }
 
+// called by the screen cleanup timer
 void oneshot_timer_cb() {
-    _clear_screen = true;
+    g_clear_screen = true;
 }
 
 // clear the OLED display
@@ -84,6 +107,17 @@ int render_string(String command) {
     return 0;
 }
 
+// Remote test tones
+int tone_test(String name) {
+    if (name.equalsIgnoreCase("bell")) {
+        play_bell_tone();
+    }
+    else if (name.equalsIgnoreCase("wakeup")) {
+        play_wakeup_tones();
+    }
+    return 0;
+}
+
 // configure the display driver
 void display_setup() { 
   delay(250);
@@ -97,22 +131,22 @@ void display_setup() {
   display.clearDisplay();
   display.display();
   delay(2000);
-
 }
 
 void setup() {
     Particle.syncTime();
     Particle.function("render",render_string);
+    Particle.function("tone_test",tone_test);
     Particle.subscribe("household/frontdoor/bell01", evt_doorbell_handler);
     Log.info("My device ID: %s", (const char*)System.deviceID());
 
     // Publish vitals periodically, indefinitely
     Particle.publishVitals(60);  
 
-    pinMode(D3, OUTPUT);// PWM tone output pin
+    pinMode(SPKR_PIN, OUTPUT);// PWM tone output pin
 
     display_setup();
-    play_wakeup_tone();
+    play_wakeup_tones();
 }
 
 void loop() {
@@ -120,8 +154,8 @@ void loop() {
     delay(5000);
     Particle.process();
 
-    if (_clear_screen) {
-        _clear_screen = false;
+    if (g_clear_screen) {
+        g_clear_screen = false;
         blank_screen();
     }
 }
