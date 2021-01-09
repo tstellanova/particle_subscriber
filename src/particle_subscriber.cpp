@@ -26,8 +26,11 @@ const unsigned int TONE_E4 = 330;
 const unsigned int TONE_F4 = 349;
 const unsigned int TONE_G4 = 392;
 
+const int NOTE_DURATION_MS = 500;
+
 // static globals
 static bool g_clear_screen = false;
+static bool g_playing_tones = false;
 static Timer g_screen_cleanup_timer(30000, oneshot_timer_cb, true);
 
 // SSD1306 display connected to I2C (SDA, SCL pins)
@@ -47,37 +50,40 @@ void sync_play_tone(unsigned int frequency, int milliseconds) {
     else {
         noTone(SPKR_PIN);
     }
+    Particle.process();
     delay(milliseconds);
 }
 
 void play_bell_tone() {
-    for (int count= 0; count < 3; count++) {
-        sync_play_tone(TONE_C4, 125);
-        sync_play_tone(TONE_D4, 125);
-        sync_play_tone(TONE_E4, 125);
-        sync_play_tone(TONE_F4, 125);
-        sync_play_tone(TONE_G4, 125);
-        sync_play_tone(TONE_A4, 125);
-        sync_play_tone(TONE_B4, 125);
-        sync_play_tone((2*TONE_C4), 125);
-        sync_play_tone(0, 1000);
+    if (!g_playing_tones) {
+        g_playing_tones = true;
+        for (int count= 0; count < 2; count++) {
+            // doorbell close encounters
+            sync_play_tone(2*TONE_D4, NOTE_DURATION_MS);
+            sync_play_tone(2*TONE_E4, NOTE_DURATION_MS);
+            sync_play_tone(2*TONE_C4, NOTE_DURATION_MS);
+            sync_play_tone(TONE_C4, NOTE_DURATION_MS);
+            sync_play_tone(TONE_G4, 2*NOTE_DURATION_MS);
+            sync_play_tone(0, 2*NOTE_DURATION_MS);
+        }
+        noTone(SPKR_PIN);
+        g_playing_tones = false;
     }
-    noTone(SPKR_PIN);
 }
 
 void play_wakeup_tones() {
-    sync_play_tone(TONE_C4, 250);
-    sync_play_tone((2*TONE_C4), 250);
-    sync_play_tone(TONE_C4, 250);
-    sync_play_tone((2*TONE_C4), 250);
+    sync_play_tone(TONE_C4, NOTE_DURATION_MS);
+    sync_play_tone((2*TONE_C4), NOTE_DURATION_MS);
+    sync_play_tone(TONE_C4, NOTE_DURATION_MS);
+    sync_play_tone((2*TONE_C4), NOTE_DURATION_MS);
     noTone(SPKR_PIN);
 }
 
 // callback from webhook
 void evt_doorbell_handler(const char *event, const char *data) {
     Log.info(event);
-    play_bell_tone();
     render_string("DOOR");
+    play_bell_tone();
     g_screen_cleanup_timer.reset();
     g_screen_cleanup_timer.start();
 }
