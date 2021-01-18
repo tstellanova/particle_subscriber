@@ -140,6 +140,8 @@ void display_setup() {
 }
 
 void setup() {
+    pinMode(SPKR_PIN, OUTPUT);// PWM tone output pin
+
     Particle.syncTime();
     Particle.function("render",render_string);
     Particle.function("tone_test",tone_test);
@@ -147,9 +149,7 @@ void setup() {
     Log.info("My device ID: %s", (const char*)System.deviceID());
 
     // Publish vitals periodically, indefinitely
-    Particle.publishVitals(60);  
-
-    pinMode(SPKR_PIN, OUTPUT);// PWM tone output pin
+    Particle.publishVitals(120);  
 
     display_setup();
     play_wakeup_tones();
